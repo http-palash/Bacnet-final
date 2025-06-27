@@ -1,12 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IP Range Scanner</title>
   <link rel="stylesheet" href="scanip.css">
 </head>
+
 <body>
+
+  <!-- Navigation -->
+  <nav style="display: flex; flex-direction: column; width: 20%; height: 20%; gap:20px; position: absolute;">
+    <!-- <button onclick="window.location.href='scanip.html'">IP Scanner</button>
+    <button onclick="window.location.href='discover_bacnet.html'">BACnet Discover</button> -->
+    <!-- <a href="scanip.html" target="_blank" class="button-link">IP Scanner</a> -->
+    <a href="discover_bacnet.html" target="_blank" class="button-link">BACnet </a>
+  </nav>
+
   <div class="container">
     <h1 style="font-family:sans-serif">IP MAC Scanner</h1>
     <form id="scanForm">
@@ -19,40 +30,30 @@
             <input type="checkbox" id="macOnly" />
           </span>
         </label>
-        </div>
-        <div style="display: flex; align-items: center; gap: 10px; margin: 10px 0; font-family: sans-serif;">
-          <label for="autoReload" style="display: flex;  font-family:sans-serif; gap: 8px;">
-            Enable auto scan
-            <span>
-              <input type="checkbox" id="autoReload" />
-            </span>
-          </label>
-          <span style="margin-left: 20px;">
-            <input
-              type="number"
-              id="reloadInterval"
-              placeholder="Time (ms)"
-              min="500"
-              value="2000"
-              max="30000"
-              style="
-                width: 60px;
-                padding: 5px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                font-family: inherit;
-              "
-            />
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin: 10px 0; font-family: sans-serif;">
+        <label for="autoReload" style="display: flex; font-family:sans-serif; gap: 8px;">
+          Enable auto scan
+          <span>
+            <input type="checkbox" id="autoReload" />
           </span>
-        </div>
-        
-        
+        </label>
+        <span style="margin-left: 20px;">
+          <input type="number" id="reloadInterval" placeholder="Time (ms)" min="500" value="2000" max="30000" style="
+              width: 60px;
+              padding: 5px;
+              border: 1px solid #ccc;
+              border-radius: 4px;
+              font-family: inherit;
+            " />
+        </span>
+      </div>
       <button id="scan-button" type="submit">Scan</button>
     </form>
     <div id="results"></div>
-    
   </div>
 
   <script src="scanip.js"></script>
 </body>
+
 </html>
