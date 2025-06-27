@@ -4,6 +4,8 @@ const dns = require('dns').promises;
 const arp = require('node-arp');
 const axios = require('axios');
 const { exec } = require('child_process');
+const bacnet = require('bacstack');
+const cheerio = require('cheerio');
 
 const app = express();
 const port = 3000;
@@ -11,25 +13,8 @@ const port = 3000;
 // Middleware to parse JSON requests and serve static files
 app.use(bodyParser.json());
 app.use(express.static('public'));
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/public/scanip.html');
-  });
 
-
-// old technique
 // Utility: Get manufacturer from MAC address
-// async function getManufacturer(mac) {
-//   if (!mac || mac === 'Unknown') return 'Unknown';
-//   try {
-//     const response = await axios.get(`https://api.macvendors.com/${mac}`);
-//     return response.data || 'Unknown';
-//   } catch (err) {
-//     return 'Unknown';
-//   }
-// }
-
-const cheerio = require('cheerio');
-// Its more better 
 async function getManufacturer(mac) {
   if (!mac || mac === 'Unknown') return 'Unknown';
   try {
@@ -40,11 +25,9 @@ async function getManufacturer(mac) {
     const metaContent = $('meta[name="description"]').attr('content');
     if (!metaContent) return 'Unknown';
 
-    // Extract vendor/company name from the content string
     const match = metaContent.match(/Vendor\/Company:\s*([^,]+)/);
     const manufacturer = match ? match[1].trim() : 'Unknown';
 
-    // console.log(manufacturer); // for debugging
     return manufacturer;
   } catch (err) {
     console.error(`Error fetching vendor for MAC ${mac}:`, err.message);
@@ -126,6 +109,11 @@ async function scanIPRange(startIP, endIP) {
   return results;
 }
 
+// Serve the root route and render scanip.html
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/public/scanip.html');
+});
+
 // POST /scan endpoint with macOnly support
 app.post('/scan', async (req, res) => {
   const { startIP, endIP, macOnly } = req.body;
@@ -145,6 +133,101 @@ app.post('/scan', async (req, res) => {
     res.status(500).json({ error: 'Error scanning IP range' });
   }
 });
+
+// BACnet Device Discovery
+app.get('/discover-bacnet', async (req, res) => {
+  const client = new bacnet({
+    port: 47808,
+    interface: '192.168.3.81',  // Adjust the interface address
+    broadcastAddress: '192.168.3.255',  // Adjust the broadcast address
+    adpuTimeout: 5000,  // Adjust the timeout if necessary
+  });
+
+  const discovered = [];
+
+  client.on('iAm', (device) => {
+    discovered.push({
+      deviceId: device.deviceId,
+      address: device.address,
+      instance: device.deviceId, // This is typically the device instance
+    });
+  });
+
+  client.whoIs();  // Send Who-Is request
+
+  // Wait for responses for 5 seconds
+  setTimeout(() => {
+    client.close();  // Close the connection after waiting
+    res.json(discovered);  // Send discovered devices with detailed information
+  }, 5000); // Adjust the timeout if necessary
+});
+
+// Control BACnet device
+app.post('/control-bacnet', async (req, res) => {
+  const { deviceId, ip, instance, value, objectType } = req.body;
+
+  console.log("Received BACnet control payload:", req.body);
+
+  // Parse and validate
+  const deviceIdInt = parseInt(deviceId);
+  const instanceInt = parseInt(instance);
+  const valueParsed = parseFloat(value);
+
+  if (isNaN(deviceIdInt) || isNaN(instanceInt) || isNaN(valueParsed)) {
+    return res.status(400).json({ error: 'Invalid deviceId, instance, or value' });
+  }
+
+  const client = new bacnet({
+    interface: '192.168.3.81',          // ✅ Match your working interface
+    broadcastAddress: '192.168.3.255',
+    adpuTimeout: 15000,
+  });
+
+  const objectTypeEnum = {
+    analogValue: bacnet.enum.ObjectType.ANALOG_VALUE,
+    binaryOutput: bacnet.enum.ObjectType.BINARY_OUTPUT,
+    binaryValue: bacnet.enum.ObjectType.BINARY_VALUE,
+  };
+
+  const selectedType = objectTypeEnum[objectType] || bacnet.enum.ObjectType.ANALOG_VALUE;
+
+  const objectId = {
+    type: selectedType,
+    instance: instanceInt,
+  };
+
+  // Determine value type for BACnet
+  let bacnetValue;
+  if (selectedType === bacnet.enum.ObjectType.BINARY_OUTPUT || selectedType === bacnet.enum.ObjectType.BINARY_VALUE) {
+    bacnetValue = [{ type: bacnet.enum.ApplicationTags.ENUMERATED, value: parseInt(valueParsed) }];
+  } else {
+    bacnetValue = [{ type: bacnet.enum.ApplicationTags.REAL, value: parseFloat(valueParsed) }];
+  }
+
+  console.log(`Attempting to write value ${valueParsed} to ${ip}, object instance ${instanceInt}, type ${objectType}...`);
+
+  client.writeProperty(ip, objectId, bacnet.enum.PropertyIdentifier.PRESENT_VALUE, bacnetValue, { priority: 8 }, (err, result) => {
+    client.close();  // Always close client after operation
+    if (err) {
+      console.error('BACnet write failed:', err.message || err);
+      return res.status(500).json({
+        error: `BACnet write error: ${err.message || 'Unknown error'}`
+      });
+    }
+    console.log('BACnet write successful:', result);
+    return res.json({ message: `Successfully wrote value ${valueParsed} to device ${deviceIdInt}` });
+  });
+});
+    
+//   } catch (err) {
+//     console.error(`Caught error: ${err.message}`);
+//     return res.status(500).json({
+//       error: `Exception: ${(err && err.message) || 'Unknown error'}`
+//     });
+//   } finally {
+//     client.close();
+//   }
+// });
 
 // Start the server
 app.listen(port, () => {

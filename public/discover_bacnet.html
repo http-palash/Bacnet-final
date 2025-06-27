@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BACnet Device Scanner</title>
+  <link rel="stylesheet" href="discover_bacnet.css">
+  <style>
+    /* Add some basic styling for the cards and input controls */
+    .device-card {
+      border: 2px solid #ccc;
+      padding: 20px;
+      margin: 15px;
+      border-radius: 10px;
+      background-color: #f9f9f9;
+      max-width: 300px;
+      display: inline-block;
+      text-align: center;
+    }
+
+    .device-card input {
+      padding: 10px;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      width: 80%;
+    }
+
+    .device-card button {
+      padding: 10px;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .device-card button:hover {
+      background-color: #0056b3;
+    }
+
+    /* Navigation style */
+    nav {
+      display: flex;
+      flex-direction: column;
+      width: 20%;
+      gap: 20px;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Navigation -->
+  <nav>
+    <a href="scanip.html" target="_blank" class="button-link">IP Scanner</a>
+  </nav>
+
+  <h1>BACnet Device Scanner</h1>
+
+  <!-- Device list container -->
+  <div id="device-list"></div>
+
+  <script>
+    async function fetchDevices() {
+      const container = document.getElementById('device-list');
+      container.innerHTML = '<p>🔄 Loading devices...</p>';  // Show loading message
+
+      try {
+        const res = await fetch('/discover-bacnet');  // Ensure this API exists in your backend
+        const devices = await res.json();
+
+        container.innerHTML = '';  // Clear loading message or previous results
+
+        if (devices.length === 0) {
+          container.innerHTML = '<p>No devices found.</p>';
+          return;
+        }
+
+        // Loop through the devices and display them as cards
+        devices.forEach(device => {
+          const card = document.createElement('div');
+          card.className = 'device-card';
+          card.innerHTML = `
+            <div class="device-icon">📡</div>
+            <div class="device-info"><strong>Device ID:</strong> ${device.deviceId}</div>
+            <div class="device-info"><strong>IP:</strong> ${device.address}</div>
+
+            <!-- Add input for control (e.g., writing a value) -->
+            <input type="number" id="instance-${device.deviceId}" placeholder="Instance Number" />
+            <input type="text" id="value-${device.deviceId}" placeholder="New Value" />
+
+            <!-- Button to trigger control -->
+            <button onclick="controlDevice('${device.deviceId}', '${device.address}')">Control Device</button>
+          `;
+          container.appendChild(card);
+        });
+      } catch (error) {
+        container.innerHTML = `<p style="color:red;">❌ Error fetching devices: ${error.message}</p>`;
+      }
+    }
+
+    // Function to trigger control action on a device
+    async function controlDevice(deviceId, ip) {
+      const instance = document.getElementById(`instance-${deviceId}`).value;
+      const value = document.getElementById(`value-${deviceId}`).value;
+
+      if (!instance || !value) {
+        alert("Please fill in both instance and value fields.");
+        return;
+      }
+
+      // Send the control action to your backend
+      try {
+        const response = await fetch('/control-bacnet', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            deviceId: deviceId,
+            ip: ip,
+            instance: instance,
+            value: value
+          })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          alert(`Successfully controlled Device ${deviceId}`);
+        } else {
+          alert(`Failed to control Device ${deviceId}: ${result.message}`);
+        }
+      } catch (error) {
+        alert("Error controlling device: " + error.message);
+      }
+    }
+
+    // Fetch devices on page load
+    fetchDevices();
+  </script>
+
+</body>
+
+</html>
